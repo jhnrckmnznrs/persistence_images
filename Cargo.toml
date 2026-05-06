@@ -1,0 +1,21 @@
+[package]
+name = "persistence_images"
+version = "0.1.0"
+edition = "2024"
+authors = ["John Rick Manzanares"]
+description = "A high-performance Rust implementation of persistence image computation from topological data analysis."
+license = "MIT"
+repository = "https://github.com/jhnrckmnznrs/persistence_images"
+readme = "README.md"
+categories = ["algorithms"]
+
+[dependencies]
+rayon = "1.10"
+csv = "1.3"
+walkdir = "2.5"
+clap = { version = "4.5", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
