@@ -2,7 +2,7 @@
 
 A high-performance Rust implementation for computing persistence images from persistence diagrams, designed for topological data analysis (TDA) workflows.
 
-The implementation supports voxel spacing correction, anisotropic Gaussian kernels, and parallel computation using Rayon.
+The implementation supports voxel spacing correction, anisotropic (unnormalized) Gaussian kernels, and parallel computation using Rayon.
 
 ---
 
