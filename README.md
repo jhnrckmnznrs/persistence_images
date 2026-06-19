@@ -63,7 +63,6 @@ This implementation uses unnormalized anisotropic Gaussian kernels.
 
 For a persistence point \((b, p)\), the contribution at pixel center \((x, y)\) is:
 
-```text
 exp(-((x - b)^2 / (2 sigma_x^2) + (y - p)^2 / (2 sigma_y^2)))
 
 ---
