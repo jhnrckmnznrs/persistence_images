@@ -17,16 +17,23 @@ pub struct SpacingDiagram {
 /// - scans directory for CSV diagrams
 /// - loads spacing metadata
 /// - attaches spacing to each diagram
-pub fn load_dataset<P: AsRef<Path>>(
-    root: P,
-    spacing_csv: P,
+pub fn load_dataset(
+    root: &Path,
+    spacing_csv: &Path,
+    output_csv: Option<&Path>,
+    diagram_suffix: Option<&str>,
     remove_h0: bool,
 ) -> Result<Vec<SpacingDiagram>, Box<dyn Error + Send + Sync>> {
     let spacing_map = load_spacing(spacing_csv)?;
 
+    let mut exclude = vec![spacing_csv.to_path_buf()];
+    if let Some(output) = output_csv {
+        exclude.push(output.to_path_buf());
+    }
+
     let mut dataset = Vec::new();
 
-    for path in collect_csv_files(root) {
+    for path in collect_csv_files(root, diagram_suffix, &exclude) {
         let diagram = read_diagram(&path, remove_h0)?;
 
         let key = base_name(&path).ok_or("Invalid filename")?;

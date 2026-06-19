@@ -39,15 +39,41 @@ pub fn save_images_to_csv(
 }
 
 /// Recursively collects all CSV files in a directory.
-pub fn collect_csv_files<P: AsRef<Path>>(root: P) -> Vec<PathBuf> {
-    WalkDir::new(root)
+pub fn collect_csv_files<P: AsRef<Path>>(
+    root: P,
+    diagram_suffix: Option<&str>,
+    exclude: &[PathBuf],
+) -> Vec<PathBuf> {
+    let excluded: std::collections::HashSet<PathBuf> = exclude
+        .iter()
+        .filter_map(|p| p.canonicalize().ok())
+        .collect();
+
+    let mut files: Vec<PathBuf> = WalkDir::new(root)
         .into_iter()
         .filter_map(Result::ok)
-        .filter(|e| {
-            e.file_type().is_file() && e.path().extension().map_or(false, |ext| ext == "csv")
-        })
+        .filter(|e| e.file_type().is_file())
         .map(|e| e.into_path())
-        .collect()
+        .filter(|p| {
+            p.extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+        })
+        .filter(|p| {
+            diagram_suffix.is_none_or(|suffix| {
+                p.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(suffix))
+            })
+        })
+        .filter(|p| {
+            p.canonicalize()
+                .map_or(true, |canonical| !excluded.contains(&canonical))
+        })
+        .collect();
+
+    files.sort();
+    files
 }
 
 /// Loads voxel spacing map from CSV.

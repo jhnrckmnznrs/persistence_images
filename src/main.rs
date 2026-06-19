@@ -43,8 +43,11 @@ struct Args {
     sigma_y: f64,
 
     /// Remove H0 component
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     remove_h0: bool,
+
+    #[arg(long)]
+    diagram_suffix: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -53,7 +56,13 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // -----------------------------
     // 1. Load dataset
     // -----------------------------
-    let dataset: Vec<SpacingDiagram> = load_dataset(&args.input, &args.spacing, args.remove_h0)?;
+    let dataset: Vec<SpacingDiagram> = load_dataset(
+        &args.input,
+        &args.spacing,
+        Some(&args.output),
+        args.diagram_suffix.as_deref(),
+        args.remove_h0,
+    )?;
 
     if dataset.is_empty() {
         println!("No data found.");
@@ -68,7 +77,10 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // -----------------------------
     // 3. Compute bounds
     // -----------------------------
-    let bounds = compute_bounds(&diagrams).expect("Failed to compute bounds (empty dataset)");
+    let Some(bounds) = compute_bounds(&diagrams) else {
+        eprintln!("No persistence points remain after preprocessing.");
+        return Ok(());
+    };
 
     println!("Bounds: {:?}", bounds);
 

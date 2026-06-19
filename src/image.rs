@@ -9,8 +9,12 @@ pub struct Bounds {
     pub y_max: f64,
 }
 
-/// Computes an anisotropic Gaussian kernel value.
-fn gaussian_aniso(dx: f64, dy: f64, sigma_x: f64, sigma_y: f64) -> f64 {
+/// Computes an unnormalized Gaussian-smoothed persistence image.
+///
+/// Each persistence point contributes an anisotropic Gaussian with peak value 1.
+/// The Gaussian normalization constant is intentionally omitted, so this image
+/// is not a probability density and is not normalized to sum to 1.
+fn unnormalized_gaussian_aniso(dx: f64, dy: f64, sigma_x: f64, sigma_y: f64) -> f64 {
     let x_term = dx * dx / (2.0 * sigma_x * sigma_x);
     let y_term = dy * dy / (2.0 * sigma_y * sigma_y);
     (-(x_term + y_term)).exp()
@@ -56,7 +60,7 @@ pub fn persistence_image(
                 let dx = x - birth;
                 let dy = y - persistence;
 
-                value += gaussian_aniso(dx, dy, sigma_x, sigma_y);
+                value += unnormalized_gaussian_aniso(dx, dy, sigma_x, sigma_y);
             }
 
             image[i * ny + j] = value;

@@ -2,7 +2,7 @@
 
 A high-performance Rust implementation for computing persistence images from persistence diagrams, designed for topological data analysis (TDA) workflows.
 
-The implementation supports voxel spacing correction, anisotropic (unnormalized) Gaussian kernels, and parallel computation using Rayon.
+The implementation supports voxel spacing correction, unnormalized anisotropic Gaussian kernels, and parallel computation using Rayon.
 
 ---
 
@@ -29,7 +29,7 @@ More explicitly:
 2. Load voxel spacing metadata
 3. Apply spacing normalization
 4. Compute global bounds
-5. Generate persistence images using Gaussian kernels
+5. Generate persistence images using unnormalized anisotropic Gaussian kernels
 6. Save results to CSV
 
 ---
@@ -56,6 +56,15 @@ image2.tif,...,1.02
 
 - Column 0: filename (must match .tif base name)
 - Column m: voxel spacing
+
+### Gaussian Kernel Convention
+
+This implementation uses unnormalized anisotropic Gaussian kernels.
+
+For a persistence point \((b, p)\), the contribution at pixel center \((x, y)\) is:
+
+```text
+exp(-((x - b)^2 / (2 sigma_x^2) + (y - p)^2 / (2 sigma_y^2)))
 
 ---
 
@@ -125,7 +134,7 @@ clap — command-line interface
 
 ## Background
 
-Persistence images are a vectorized representation of persistence diagrams introduced in the following article:
+Persistence images are a vectorized representation of persistence diagrams introduced in the following article. This implementation follows the same general persistence image construction, but uses an unnormalized Gaussian kernel because the output is intended as a numerical feature vector rather than a probability density:
 
 Adams et al., Persistence Images: A Stable Vector Representation of Persistent Homology, JMLR 2017.
 

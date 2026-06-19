@@ -24,7 +24,11 @@ pub type Diagram = Vec<(f64, f64)>;
 /// - parsing fails
 pub fn read_diagram(path: &Path, remove_h0: bool) -> Result<Diagram, Box<dyn Error + Send + Sync>> {
     let file = File::open(path)?;
-    let mut rdr = csv::Reader::from_reader(file);
+
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(file);
 
     let mut data = Vec::new();
 
