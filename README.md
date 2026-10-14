@@ -212,6 +212,15 @@ supports `auto`, `direct`, `separable`, and `shared` CLI engines (all evaluate t
 integral formula), and rejects truncating FFT/sparse backends and
 `--absolute-error`. Other engines apply only to the legacy sampled mode.
 
+For a reproducible synthetic performance comparison of the direct stable
+integrator against the shared CDF basis:
+
+```bash
+cargo run --release --locked --example benchmark_stable_shared
+```
+
+Timings depend on hardware and on the diagram's coordinate multiplicities.
+
 ## Testing and benchmarking
 
 ```bash
