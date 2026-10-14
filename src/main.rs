@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use persistence_images::{
     dataset::{SpacingDiagram,load_dataset,to_scaled_diagrams},
     image::{compute_bounds,Bounds}, io,
-    stable::stable_batch_images,
+    stable_basis::stable_batch_images_with_engine,
     optimized::{Engine,batch_images},
 };
 
@@ -55,11 +55,11 @@ fn main()->Result<(),Box<dyn Error+Send+Sync>>{
         if args.absolute_error.is_some() {
             return Err("Stable representation does not accept --absolute-error".into());
         }
-        if !matches!(args.engine,Engine::Auto|Engine::Direct|Engine::Separable) {
-            return Err("Stable representation supports --engine auto, direct, or separable".into());
+        if !matches!(args.engine,Engine::Auto|Engine::Direct|Engine::Separable|Engine::Shared) {
+            return Err("Stable representation supports --engine auto, direct, separable, or shared".into());
         }
-        stable_batch_images(&diagrams,&spacings,bounds,args.nx,args.ny,
-            args.sigma_x,args.sigma_y,args.weight_scale)
+        stable_batch_images_with_engine(&diagrams,&spacings,bounds,args.nx,args.ny,
+            args.sigma_x,args.sigma_y,args.weight_scale,args.engine)
     } else {
         batch_images(&diagrams,&spacings,bounds,args.nx,args.ny,
             args.sigma_x,args.sigma_y,args.engine,args.absolute_error)
