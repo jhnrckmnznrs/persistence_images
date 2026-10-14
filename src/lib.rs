@@ -11,3 +11,5 @@ pub use image::{Bounds,compute_bounds,persistence_image};
 pub use optimized::{Engine,SharedGaussianBasis,adaptive_image,batch_images,separable_image,sparse_image};
 
 pub use interp_fft::{InterpFft, StencilCertificate, select_stencil, interp_fft_image};
+pub mod stable;
+pub use stable::{stable_persistence_image,stable_batch_images};
