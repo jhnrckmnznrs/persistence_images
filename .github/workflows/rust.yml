@@ -8,11 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Test and capture dependency lock
+      - name: Rust tests and benchmark smoke
         run: |
-          cargo test --all-targets
-          echo LOCK_BEGIN
-          cat Cargo.lock
-          echo LOCK_END
-          cargo run --release --example benchmark_suite -- --case small_continuous --engine separable --repeats 1 --warmup 0
-          cargo run --release --example benchmark_suite -- --case medium_continuous --engine interp-fft --absolute-error 1e-8 --repeats 1 --warmup 0
+          cargo test --all-targets --locked
+          cargo run --release --locked --example benchmark_suite -- --case small_continuous --engine separable --repeats 1 --warmup 0
+          cargo run --release --locked --example benchmark_suite -- --case medium_continuous --engine interp-fft --absolute-error 1e-8 --repeats 1 --warmup 0
