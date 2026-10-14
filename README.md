@@ -1,150 +1,137 @@
 # Persistence Images in Rust
 
-A high-performance Rust implementation for computing persistence images from persistence diagrams, designed for topological data analysis (TDA) workflows.
+Compute fixed-length feature vectors from persistence diagrams, with parallel
+processing, reusable Gaussian bases, and an optional error-controlled
+approximation for large images.
 
-The implementation supports voxel spacing correction, unnormalized anisotropic Gaussian kernels, and parallel computation using Rayon.
+The project uses *unnormalized anisotropic Gaussian kernels*. The default
+\`--engine auto\` chooses between separable Gaussian summation and cached
+bases where there are enough repeated coordinates to justify reuse. It
+does **not** approximate results unless \`--absolute-error\` is supplied.
 
----
+## Installation
 
-## Overview
+Requires a Rust toolchain that supports edition 2024.
 
-This tool converts persistence diagrams (birth, death pairs) into fixed-size numerical representations called Persistence Images, which can be used for:
-
-- Machine learning on topological data
-- Shape analysis
-- Medical imaging (e.g., voxel-based datasets)
-- Feature extraction from TDA pipelines
-
----
-
-## Pipeline
-
-The computation follows this workflow:
-
-CSV diagrams → persistence diagrams → spacing normalization → persistence images → CSV output
-
-More explicitly:
-
-1. Load persistence diagrams from CSV files
-2. Load voxel spacing metadata
-3. Apply spacing normalization
-4. Compute global bounds
-5. Generate persistence images using unnormalized anisotropic Gaussian kernels
-6. Save results to CSV
-
----
-
-## Input Format
-
-### 1. Diagram CSV files
-
-Each file must contain at least pairs (birth, death) computed using existing persistent homology libraries:
-
-0.12,1.45
-0.30,2.10
-...
-
-The file/s are expected to have no headers.
-
----
-
-### 2. Spacing CSV file
-
-filename,...,spacing_micro
-image1.tif,...,0.86
-image2.tif,...,1.02
-
-- Column 0: filename (must match .tif base name)
-- Column m: voxel spacing
-
-### Gaussian Kernel Convention
-
-This implementation uses unnormalized anisotropic Gaussian kernels.
-
-For a persistence point \((b, p)\), the contribution at pixel center \((x, y)\) is:
-
-exp(-((x - b)^2 / (2 sigma_x^2) + (y - p)^2 / (2 sigma_y^2)))
-
----
-
-## Output Format
-
-filename,pixel_1,pixel_2,...,pixel_N
-image1,0.12,0.03,...
-image2,0.08,0.11,...
-
-Each row corresponds to one persistence image flattened in row-major order.
-
----
-
-## Usage
-
-### Build
-
+\`\`\`bash
 cargo build --release
+cargo test
+\`\`\`
 
----
+## Input and output
 
-### Run CLI
+- Diagram CSV files are headerless. The first two columns are \`birth,death\`.
+- The spacing CSV has a header, filename in column 1, and voxel spacing in
+  column 3 (zero-indexed column 2). \`image.csv\` looks for \`image.tif\`.
+  A missing spacing entry defaults to 1.0.
+- The output CSV has **no header**. Rows contain a filename stem and \`nx*ny\`
+  values, flattened so pixel \`(i,j)\` has index \`i*ny+j\`.
 
+Each diagram is first converted to \`(birth, persistence=death-birth)\`. Voxel
+spacing multiplies both diagram coordinates and Gaussian bandwidths. Bounds
+are computed globally from all scaled diagrams. Grid centers are
+
+\`\`\`text
+x_i = x_min + (i + 0.5) * (x_max - x_min) / nx
+y_j = y_min + (j + 0.5) * (y_max - y_min) / ny
+\`\`\`
+
+At pixel \`(x,y)\`, each diagram point \`(b,p)\` contributes
+
+\`\`\`text
+exp(-((x-b)^2 / (2*sigma_x^2) + (y-p)^2 / (2*sigma_y^2)))
+\`\`\`
+
+No Gaussian normalization, persistence weighting, pixel integration, or
+post-hoc feature normalization is performed.
+
+## Command line
+
+\`\`\`bash
 cargo run --release -- \
   --input ./data/diagrams \
   --spacing ./data/spacing.csv \
   --output ./output/images.csv \
-  --nx 10 \
-  --ny 8 \
-  --sigma-x 0.86 \
-  --sigma-y 0.64 \
-  --remove-h0
+  --nx 96 --ny 96 \
+  --sigma-x 0.86 --sigma-y 0.63984 \
+  --engine auto
+\`\`\`
 
----
+The optional \`--remove-h0\` deletes one point with the smallest birth;
+ties use the largest death. \`--diagram-suffix\` limits the CSV files scanned.
 
-## Parameters
+### Engines
 
-nx: grid resolution in x-direction  
-ny: grid resolution in y-direction  
-sigma_x: global Gaussian bandwidth (x)  
-sigma_y: global Gaussian bandwidth (y)  
-remove_h0: removes dominant H0 component  
+| Engine | Method | Numerical behavior |
+|---|---|---|
+| \`auto\` | Cost-guided shared basis or separable kernel | Exact in real arithmetic by default |
+| \`direct\` | Original triple loop | Reference implementation |
+| \`separable\` | Compute x/y Gaussian factors once per point | Exact in real arithmetic |
+| \`shared\` | Share x/y Gaussian basis across diagrams with equal spacing | Exact in real arithmetic; memory-limited |
+| \`sparse\` | Evaluate local Gaussian windows | Absolute truncation error bounded per pixel |
 
-Voxel spacing scales both:
-- diagram coordinates
-- Gaussian kernel bandwidth
+Set \`--engine sparse --absolute-error 1e-8\` for a requested error
+tolerance. You may also give \`--absolute-error\` with \`auto\`; it selects
+the sparse method only when a cheap interaction-count estimate suggests
+the approximation will be substantially faster.
 
----
+For \`N\` persistence points, a window cutoff
 
-## Performance
+\`\`\`text
+r = sqrt(2 * max(0, log(N) - log(absolute_error)))
+\`\`\`
 
-- Parallelized using Rayon
-- Optimized release build recommended
+keeps point/pixel evaluations where
+\`|x-b| <= r*sigma_x\` and \`|y-p| <= r*sigma_y\`. Every omitted Gaussian
+term is at most \`exp(-r^2/2)\`, hence the **per-pixel absolute truncation
+error** is at most \`N*exp(-r^2/2) <= absolute_error\`. This guarantee
+excludes floating-point roundoff, and is not a relative error bound.
 
-cargo build --release
+### Shared Gaussian bases
 
----
+For many quantized diagrams, distinct birth coordinates \`b_u\` and
+persistence coordinates \`p_v\` repeat. Define \`C[u,v]\` to count how many
+points have coordinate pair \`(b_u,p_v)\`. Then
 
-## Dependencies
+\`\`\`text
+I = A @ C @ D
+A[i,u] = exp(-0.5 * ((x_i-b_u)/sigma_x)^2)
+D[v,j] = exp(-0.5 * ((y_j-p_v)/sigma_y)^2)
+\`\`\`
 
-rayon — parallel computation  
-csv — CSV parsing  
-walkdir — directory traversal  
-clap — command-line interface  
+For a batch of diagrams with common grid, bounds, and spacing, both \`A\`
+and \`D\` are calculated only once. The implementation groups samples by
+exact voxel spacing, counts multiplicities separately for each sample,
+chooses a cheaper matrix-multiplication order, and retains the original
+sample order. It caps the count matrix at two million elements and the
+combined basis matrices at 16 million elements. Auto falls back when
+reuse is not economical; explicit \`shared\` reports an error if its
+memory cap is exceeded.
 
----
+The standalone public \`persistence_image\` function is retained. New Rust
+APIs include \`separable_image\`, \`sparse_image\`, \`adaptive_image\`,
+\`SharedGaussianBasis::from_diagrams\` / \`transform\`, and \`batch_images\`.
+Different arithmetic order can change floating-point rounding, so compare
+against the original reference with tolerances rather than exact bits.
+
+## Testing and benchmarking
+
+\`\`\`bash
+cargo test
+cargo run --release --example benchmark_optimized
+\`\`\`
+
+The benchmark compares one batch of quantized diagrams using the original
+and adaptive algorithms. It prints wall-clock times and maximum absolute
+numerical difference. Benchmark your real data before assuming a speedup.
 
 ## Background
 
-Persistence images are a vectorized representation of persistence diagrams introduced in the following article. This implementation follows the same general persistence image construction, but uses an unnormalized Gaussian kernel because the output is intended as a numerical feature vector rather than a probability density:
-
-Adams et al., Persistence Images: A Stable Vector Representation of Persistent Homology, JMLR 2017.
-
----
+Adams et al., *Persistence Images: A Stable Vector Representation of
+Persistent Homology*, JMLR (2017). This project's unweighted,
+unnormalized construction should not automatically be assumed to satisfy
+the stability assumptions of the weighted persistence image in that work.
 
 ## License
 
-MIT License
-
----
-
-## Author
-
-John Rick Manzanares
+MIT. Original author: John Rick Manzanares.
