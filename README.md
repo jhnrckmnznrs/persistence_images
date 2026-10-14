@@ -163,3 +163,20 @@ the stability assumptions of the weighted persistence image in that work.
 ## License
 
 MIT. Original author: John Rick Manzanares.
+
+## Reproducible cross-language benchmarks
+
+The suite in [benchmarks](benchmarks/README.md) shares a deterministic workload
+manifest with the companion Python repository. It records small, medium, large,
+quantized, continuous, narrow-Gaussian and anisotropic workloads. Reports contain
+median kernel time, peak Linux RSS, generator fingerprint, and independently
+computed numerical error. Each run isolates a single workload in one process.
+
+```bash
+cargo run --release --locked --example benchmark_suite -- --list
+cargo run --release --locked --example benchmark_suite -- \\
+  --case medium_continuous --engine separable --repeats 5
+```
+
+For a combined Python/Rust sweep, use the Python repository's
+`benchmarks/run_suite.py`. CI smoke benchmarks test correctness, not speed.
