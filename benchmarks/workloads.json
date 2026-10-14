@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "generator": "lcg32-u24-v1",
+  "generator_description": "state = state * 1664525 + 1013904223 modulo 2^32; take top 24 bits; continuous=(u24+0.5)/2^24; quantized=(u24 % levels)/levels; (birth,persistence)",
+  "bounds": [
+    0,
+    1,
+    0,
+    1
+  ],
+  "quantized_levels": [
+    16,
+    32
+  ],
+  "default_absolute_error": 1e-8,
+  "reference": "direct Gaussian sum for <=2048 pixels; otherwise 64 deterministic sampled pixels",
+  "cases": [
+    {
+      "name": "small_continuous",
+      "profile": "smoke",
+      "kind": "continuous",
+      "n": 128,
+      "nx": 32,
+      "ny": 24,
+      "sigma_x": 0.16,
+      "sigma_y": 0.11,
+      "seed": 17,
+      "fingerprint_fnv64": "86642a1aa2a275a0"
+    },
+    {
+      "name": "small_quantized",
+      "profile": "smoke",
+      "kind": "quantized",
+      "n": 256,
+      "nx": 32,
+      "ny": 24,
+      "sigma_x": 0.12,
+      "sigma_y": 0.07,
+      "seed": 29,
+      "fingerprint_fnv64": "99dae6e0a8784441"
+    },
+    {
+      "name": "medium_continuous",
+      "profile": "standard",
+      "kind": "continuous",
+      "n": 2500,
+      "nx": 96,
+      "ny": 80,
+      "sigma_x": 0.16,
+      "sigma_y": 0.1,
+      "seed": 41,
+      "fingerprint_fnv64": "fc2c829e048f1ae6"
+    },
+    {
+      "name": "medium_quantized",
+      "profile": "standard",
+      "kind": "quantized",
+      "n": 2500,
+      "nx": 96,
+      "ny": 80,
+      "sigma_x": 0.16,
+      "sigma_y": 0.1,
+      "seed": 53,
+      "fingerprint_fnv64": "bfc4ef72eb4dab5b"
+    },
+    {
+      "name": "large_continuous",
+      "profile": "full",
+      "kind": "continuous",
+      "n": 20000,
+      "nx": 128,
+      "ny": 128,
+      "sigma_x": 0.2,
+      "sigma_y": 0.15,
+      "seed": 67,
+      "fingerprint_fnv64": "8fa71c1fe330bf4c"
+    },
+    {
+      "name": "large_quantized",
+      "profile": "full",
+      "kind": "quantized",
+      "n": 20000,
+      "nx": 128,
+      "ny": 128,
+      "sigma_x": 0.2,
+      "sigma_y": 0.15,
+      "seed": 79,
+      "fingerprint_fnv64": "b1f060d0b32c98b5"
+    },
+    {
+      "name": "large_anisotropic",
+      "profile": "full",
+      "kind": "continuous",
+      "n": 20000,
+      "nx": 192,
+      "ny": 128,
+      "sigma_x": 0.35,
+      "sigma_y": 0.035,
+      "seed": 83,
+      "fingerprint_fnv64": "4beb1a15dcde0d12"
+    },
+    {
+      "name": "large_narrow",
+      "profile": "full",
+      "kind": "continuous",
+      "n": 20000,
+      "nx": 128,
+      "ny": 128,
+      "sigma_x": 0.008,
+      "sigma_y": 0.015,
+      "seed": 97,
+      "fingerprint_fnv64": "8b74ec6476ba72a6"
+    },
+    {
+      "name": "huge_continuous",
+      "profile": "full",
+      "kind": "continuous",
+      "n": 100000,
+      "nx": 256,
+      "ny": 256,
+      "sigma_x": 0.2,
+      "sigma_y": 0.2,
+      "seed": 101,
+      "fingerprint_fnv64": "b4b902aa5b9ac24c"
+    },
+    {
+      "name": "huge_quantized",
+      "profile": "full",
+      "kind": "quantized",
+      "n": 100000,
+      "nx": 256,
+      "ny": 256,
+      "sigma_x": 0.2,
+      "sigma_y": 0.2,
+      "seed": 109,
+      "fingerprint_fnv64": "e13215c2128e96bc"
+    }
+  ]
+}
