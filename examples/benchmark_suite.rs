@@ -161,6 +161,8 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
   "reference_scope":if idx.len()==c.nx*c.ny {"full"} else {"64 sampled pixels"},
   "reference_pixel_count":idx.len(),
   "max_abs_error":err,"max_scaled_error":err/refmax.max(1.0),
+  "sampled_pixel_indices":idx,
+  "sampled_pixel_values":idx.iter().map(|&i|image[i]).collect::<Vec<f64>>(),
   "image_sum":image.iter().sum::<f64>(),
   "image_linf":image.iter().map(|v|v.abs()).fold(0.0_f64,f64::max),
   "rust_package_version":env!("CARGO_PKG_VERSION"),
