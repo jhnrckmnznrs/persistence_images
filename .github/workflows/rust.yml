@@ -8,7 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-targets
+      - name: Test and capture dependency lock
+        run: |
+          cargo test --all-targets
           echo LOCK_BEGIN
           cat Cargo.lock
           echo LOCK_END
