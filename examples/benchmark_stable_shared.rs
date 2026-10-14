@@ -1,6 +1,6 @@
 //! Benchmark stable direct CDF integration versus cross-diagram shared bases.
 //! cargo run --release --locked --example benchmark_stable_shared
-use persistence_images::{Bounds,Engine,stable_persistence_image,stable_batch_images_with_engine};
+use persistence_images::{Bounds,Engine,stable_batch_images_with_engine};
 use std::time::Instant;
 use std::hint::black_box;
 fn main(){
@@ -13,9 +13,8 @@ fn main(){
     ).collect();
     let spacings=vec![1.0;diagrams.len()];
     let start=Instant::now();
-    let reference:Vec<_>=diagrams.iter().map(|d|black_box(
-        stable_persistence_image(d,b,80,64,0.14,0.11,0.7).unwrap()
-    )).collect();
+    let reference=black_box(stable_batch_images_with_engine(
+        &diagrams,&spacings,b,80,64,0.14,0.11,0.7,Engine::Direct).unwrap());
     let direct_time=start.elapsed();
     let start=Instant::now();
     let shared=black_box(stable_batch_images_with_engine(
