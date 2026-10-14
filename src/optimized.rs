@@ -2,6 +2,7 @@
 //! The original image::persistence_image remains the direct numerical reference.
 use crate::diagram::Diagram;
 use crate::image::{Bounds, persistence_image};
+use crate::interp_fft::{InterpFft, select_stencil, interp_fft_image, fft_shape};
 use clap::ValueEnum;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
@@ -10,7 +11,7 @@ const MAX_CELLS: usize = 2_000_000;
 const MAX_BASIS: usize = 16_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Engine { Auto, Direct, Separable, Shared, Sparse }
+pub enum Engine { Auto, Direct, Separable, Shared, Sparse, InterpFft }
 
 fn check(bounds: Bounds, nx: usize, ny: usize, sx: f64, sy: f64) -> Result<(), String> {
     if nx == 0 || ny == 0 || nx.checked_mul(ny).is_none() {
@@ -99,6 +100,8 @@ pub fn adaptive_image(dgm:&Diagram,bounds:Bounds,nx:usize,ny:usize,
         Engine::Separable|Engine::Shared=>separable_image(dgm,bounds,nx,ny,sx,sy),
         Engine::Sparse=>sparse_image(dgm,bounds,nx,ny,sx,sy,
                                     epsilon.ok_or("sparse requires --absolute-error")?),
+        Engine::InterpFft=>interp_fft_image(dgm,bounds,nx,ny,sx,sy,
+                                    epsilon.ok_or("interp-fft requires --absolute-error")?),
         Engine::Auto=>{
             if let Some(r)=radius {
                 if dgm.len()>=128 && nx*ny>=1024 {
@@ -111,6 +114,23 @@ pub fn adaptive_image(dgm:&Diagram,bounds:Bounds,nx:usize,ny:usize,
                     if local < 0.12*(dgm.len() as f64)*(nx as f64)*(ny as f64) {
                         return sparse_image(dgm,bounds,nx,ny,sx,sy,
                                             epsilon.expect("validated tolerance"));
+                    }
+                }
+            }
+            if let Some(e)=epsilon {
+                if dgm.len()>=4096 && nx*ny>=4096 {
+                    if let Some(c)=select_stencil(dgm.len(),bounds,nx,ny,sx,sy,e)? {
+                        if dgm.iter().all(|&(b,p)| b>=bounds.x_min && b<=bounds.x_max
+                            && p>=bounds.y_min && p<=bounds.y_max) {
+                            if let Some((lx,ly))=fft_shape(nx,ny,c.width_x,c.width_y) {
+                                let n=dgm.len() as f64;
+                                let work=n*(c.width_x*c.width_y) as f64
+                                    + 30.0*(lx*ly) as f64*((lx*ly) as f64).log2();
+                                if n*(nx*ny) as f64 > 8.0*work {
+                                    return InterpFft::new(bounds,nx,ny,sx,sy,c)?.evaluate(dgm);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -250,6 +270,41 @@ pub fn batch_images(diagrams:&[Diagram],spacings:&[f64],bounds:Bounds,
                 },
                 Err(e) if engine==Engine::Shared=>return Err(e),
                 Err(_)=>(),
+            }
+        }
+        // A single Gaussian spectrum and set of FFT plans can be reused
+        // across this complete group, because spacings and bounds match.
+        if (engine==Engine::InterpFft || engine==Engine::Auto)
+           && absolute_error.is_some() {
+            let e=absolute_error.expect("validated");
+            let nmax=ds.iter().map(|d|d.len()).max().unwrap_or(0);
+            if nmax==0 {
+                for &i in idx {out[i]=vec![0.0;nx*ny];}
+                continue;
+            }
+            let selected=select_stencil(nmax,bounds,nx,ny,local_sx,local_sy,e)?;
+            if engine==Engine::InterpFft && selected.is_none() {
+                return Err("No FFT interpolation stencil certifies this error tolerance".into());
+            }
+            if let Some(c)=selected {
+                let inside=ds.iter().all(|d|d.iter().all(|&(b,p)|
+                    b>=bounds.x_min&&b<=bounds.x_max&&p>=bounds.y_min&&p<=bounds.y_max));
+                if engine==Engine::InterpFft && !inside {
+                    return Err("Interpolation FFT needs source coordinates inside bounds".into());
+                }
+                let use_fft=engine==Engine::InterpFft || (inside
+                    && nx*ny>=4096 && idx.iter().any(|&i|diagrams[i].len()>=4096)
+                    && fft_shape(nx,ny,c.width_x,c.width_y).is_some_and(|(lx,ly)|{
+                        let n:usize=idx.iter().map(|&i|diagrams[i].len()).sum();
+                        let work=n as f64*(c.width_x*c.width_y) as f64
+                            + 30.0*(lx*ly) as f64*((lx*ly) as f64).log2();
+                        (n as f64)*(nx*ny) as f64 > 8.0*work
+                    }));
+                if use_fft {
+                    let plan=InterpFft::new(bounds,nx,ny,local_sx,local_sy,c)?;
+                    for &i in idx {out[i]=plan.evaluate(&diagrams[i])?;}
+                    continue;
+                }
             }
         }
         let computed:Vec<Result<Vec<f64>,String>>=idx.par_iter().map(|&i|{

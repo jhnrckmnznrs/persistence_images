@@ -14,6 +14,7 @@ rayon = "1.10"
 csv = "1.3"
 walkdir = "2.5"
 clap = { version = "4.5", features = ["derive"] }
+rustfft = "6.2"
 
 [profile.release]
 opt-level = 3

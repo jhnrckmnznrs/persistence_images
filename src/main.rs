@@ -19,9 +19,9 @@ struct Args {
     #[arg(long,default_value_t=0.63984)] sigma_y:f64,
     #[arg(long,default_value_t=false)] remove_h0:bool,
     #[arg(long)] diagram_suffix:Option<String>,
-    /// auto, direct, separable, shared, or sparse
+    /// auto, direct, separable, shared, sparse, or interp-fft
     #[arg(long,value_enum,default_value_t=Engine::Auto)] engine:Engine,
-    /// Optional absolute truncation error per pixel; required for sparse.
+    /// Optional absolute approximation error per pixel; required for sparse and interp-fft.
     /// Auto is exact unless this argument is supplied.
     #[arg(long)] absolute_error:Option<f64>,
 }

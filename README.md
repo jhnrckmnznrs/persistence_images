@@ -69,6 +69,7 @@ ties use the largest death. `--diagram-suffix` limits the CSV files scanned.
 | `separable` | Compute x/y Gaussian factors once per point | Exact in real arithmetic |
 | `shared` | Share x/y Gaussian basis across diagrams with equal spacing | Exact in real arithmetic; memory-limited |
 | `sparse` | Evaluate local Gaussian windows | Absolute truncation error bounded per pixel |
+| `interp-fft` | Interpolate sources to a lattice, then use one cached Gaussian FFT convolution | Uniform absolute interpolation-error certificate; floating-point roundoff excluded |
 
 Set `--engine sparse --absolute-error 1e-8` for a requested error
 tolerance. You may also give `--absolute-error` with `auto`; it selects
@@ -108,9 +109,35 @@ combined basis matrices at 16 million elements. Auto falls back when
 reuse is not economical; explicit `shared` reports an error if its
 memory cap is exceeded.
 
+Use `--engine interp-fft --absolute-error 1e-8` to explicitly request
+one-FFT source gridding. The method is intended for large continuous-valued
+diagrams with sufficiently resolved Gaussians. It builds even-width central
+Lagrange stencils on an extended lattice, deposits signed weights, then uses
+one zero-padded Gaussian convolution. It caches FFT plans and the Gaussian
+spectrum across diagrams sharing global bounds, spacing and bandwidths.
+
+For stencil widths `2r_x` and `2r_y`, with `h_x, h_y` the pixel-center
+spacing, the exact-arithmetic interpolation certificate is
+
+```text
+E_r(h,sigma) = ((2r)!)^2 / (2^(5r) (r!)^3) * (h/sigma)^(2r)
+per-pixel absolute interpolation error <= N*(E_rx+E_ry+E_rx*E_ry)
+```
+
+The selector searches even widths up to 18 and caps the FFT workspace at
+four million complex cells. If no width certifies the requested tolerance,
+explicit `interp-fft` errors; `auto` retains other methods. `auto` remains
+non-approximating without `--absolute-error`. The interpolation certificate
+**excludes** rounding error in signed deposition and FFT operations; it does
+not guarantee bitwise equivalence or strict floating-point absolute error.
+FFT evaluation requires a nondegenerate global bounding box and sources
+inside it. The FFT uses linear-convolution padding to avoid cyclic aliasing
+on the output region.
+
 The standalone public `persistence_image` function is retained. New Rust
 APIs include `separable_image`, `sparse_image`, `adaptive_image`,
-`SharedGaussianBasis::from_diagrams` / `transform`, and `batch_images`.
+`SharedGaussianBasis::from_diagrams` / `transform`, `interp_fft_image`,
+`InterpFft`, `select_stencil`, and `batch_images`.
 Different arithmetic order can change floating-point rounding, so compare
 against the original reference with tolerances rather than exact bits.
 
@@ -119,6 +146,7 @@ against the original reference with tolerances rather than exact bits.
 ```bash
 cargo test
 cargo run --release --example benchmark_optimized
+cargo run --release --example benchmark_interp_fft
 ```
 
 The benchmark compares one batch of quantized diagrams using the original
