@@ -141,6 +141,56 @@ APIs include `separable_image`, `sparse_image`, `adaptive_image`,
 Different arithmetic order can change floating-point rounding, so compare
 against the original reference with tolerances rather than exact bits.
 
+## Stable, weighted, integrated persistence images
+
+Use the `--representation stable` option for **probability-normalized Gaussian
+densities**, bounded Lipschitz weights that vanish on the diagonal, and
+**exact pixel integration** via Gaussian CDF differences. Legacy pixel-center
+evaluation remains the default for backward compatibility.
+
+```bash
+cargo run --release --locked -- \\
+  --input ./data/diagrams --spacing ./data/spacing.csv \\
+  --output ./output/stable.csv --nx 128 --ny 128 \\
+  --sigma-x 0.2 --sigma-y 0.2 \\
+  --representation stable --weight-scale 1.0 \\
+  --bounds 0 3 0 3
+```
+
+The per-point weight is `min(1, persistence / weight_scale)` for finite,
+nonnegative persistence. The Gaussian integrates to one **over the plane**,
+but each image sums to the weighted mass inside the selected pixel rectangle.
+Do not divide each image by its sum: such per-image normalization would
+undermine stability near the empty diagram.
+
+For a **fixed grid, fixed bandwidths and fixed weight scale**, the map has a
+global Wasserstein-1 Lipschitz bound (birth-death L-infinity matching cost):
+
+```text
+||PI(D)-PI(E)||_1 <= [2/weight_scale
+  + sqrt(2/pi)*(1/sigma_x + 2/sigma_y)] * W1_inf(D,E)
+```
+
+The proof uses the bounded Lipschitz weight, Gaussian L1-derivative bounds,
+and contraction under integration over disjoint pixels. This guarantees
+stability of the mathematical representation, not floating-point error.
+See the companion Python repository's
+[proof](https://github.com/jhnrckmnznrs/persistence_images_python/blob/main/docs/STABLE_PERSISTENCE_IMAGES.md).
+
+**Fixed bounds are essential for comparisons.** By default the CLI computes
+bounds from the current input dataset, which changes the map when the dataset
+changes. Pass `--bounds xmin xmax ymin ymax` for a fixed feature space.
+Degenerate fitted bounds are rejected in stable mode. Essential/infinite
+persistence classes must be treated separately; their stable representation
+is not defined by finite Gaussian centers. Spacing-scaled diagrams use
+spacing-scaled Gaussian bandwidths as in the original CLI; varying per-diagram
+bandwidths also changes the fixed-map hypothesis of the stability theorem.
+
+The stable mode uses a separate `stable_persistence_image` Rust API. It
+supports `auto`, `direct`, and `separable` CLI engines (all evaluate the
+integral formula), and rejects truncating FFT/sparse backends and
+`--absolute-error`. Other engines apply only to the legacy sampled mode.
+
 ## Testing and benchmarking
 
 ```bash
