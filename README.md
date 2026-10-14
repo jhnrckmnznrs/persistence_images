@@ -186,8 +186,29 @@ is not defined by finite Gaussian centers. Spacing-scaled diagrams use
 spacing-scaled Gaussian bandwidths as in the original CLI; varying per-diagram
 bandwidths also changes the fixed-map hypothesis of the stability theorem.
 
+The stable mode also supports **exact weighted Gaussian CDF-difference
+basis reuse** across batches of diagrams with matching grid, bandwidth
+and weight scale. For distinct births `beta_u` and persistence values
+`pi_v`, let `C[u,v]` count repeated coordinate pairs, and set
+
+```text
+A[i,u] = Phi((x_{i+1}-beta_u)/sigma_x)-Phi((x_i-beta_u)/sigma_x)
+D[v,j] = min(1, pi_v/weight_scale)
+       * (Phi((y_{j+1}-pi_v)/sigma_y)-Phi((y_j-pi_v)/sigma_y))
+PI = A @ C @ D
+```
+
+`--representation stable --engine shared` forces basis reuse (and enforces
+memory limits); `--engine auto` uses a conservative cost estimate and
+falls back to pointwise integration when reuse is not economical.
+Per-diagram bandwidth changes caused by voxel spacing are grouped
+separately. This factorization remains exact in real arithmetic and
+preserves the same fixed-grid Wasserstein stability theorem; floating-point
+summation order may differ. `StableCdfBasis::from_diagrams` and
+`stable_batch_images_with_engine` are available from the Rust API.
+
 The stable mode uses a separate `stable_persistence_image` Rust API. It
-supports `auto`, `direct`, and `separable` CLI engines (all evaluate the
+supports `auto`, `direct`, `separable`, and `shared` CLI engines (all evaluate the
 integral formula), and rejects truncating FFT/sparse backends and
 `--absolute-error`. Other engines apply only to the legacy sampled mode.
 

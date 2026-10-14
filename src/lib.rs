@@ -13,3 +13,6 @@ pub use optimized::{Engine,SharedGaussianBasis,adaptive_image,batch_images,separ
 pub use interp_fft::{InterpFft, StencilCertificate, select_stencil, interp_fft_image};
 pub mod stable;
 pub use stable::{stable_persistence_image,stable_batch_images};
+
+pub mod stable_basis;
+pub use stable_basis::{StableCdfBasis,stable_batch_images_with_engine};

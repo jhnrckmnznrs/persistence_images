@@ -11,7 +11,7 @@ use std::f64::consts::SQRT_2;
 
 /// Gaussian mass within [left,right] for a normal law centered at mean.
 /// Choose a complementary-CDF formula in positive tails to avoid 1-1 loss.
-fn cdf_interval(left:f64,right:f64,mean:f64,sigma:f64)->f64 {
+pub(crate) fn cdf_interval(left:f64,right:f64,mean:f64,sigma:f64)->f64 {
     let lo=(left-mean)/(sigma*SQRT_2);
     let hi=(right-mean)/(sigma*SQRT_2);
     let answer=if lo >= 0.0 {
