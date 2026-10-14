@@ -8,4 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-targets
+      - name: Validate and export dependency lock
+        run: |
+          cargo test --all-targets
+          echo "LOCKFILE_BEGIN"
+          cat Cargo.lock
+          echo "LOCKFILE_END"
