@@ -1,121 +1,46 @@
 use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
-
 use persistence_images::{
-    dataset::{SpacingDiagram, load_dataset, to_scaled_diagrams},
-    image::{compute_bounds, persistence_image},
-    io,
+    dataset::{SpacingDiagram,load_dataset,to_scaled_diagrams},
+    image::compute_bounds, io,
+    optimized::{Engine,batch_images},
 };
 
-use rayon::prelude::*;
-
-/// Persistence Image Generator from Persistence Diagrams
-#[derive(Parser, Debug)]
-#[command(author, version, about)]
+#[derive(Debug,Parser)]
+#[command(author,version,about="Persistence images from CSV persistence diagrams")]
 struct Args {
-    /// Input directory containing persistence diagram CSV files
-    #[arg(short, long)]
-    input: PathBuf,
-
-    /// CSV file containing voxel spacing information
-    #[arg(short, long)]
-    spacing: PathBuf,
-
-    /// Output CSV file path
-    #[arg(short, long)]
-    output: PathBuf,
-
-    /// Grid resolution in x direction
-    #[arg(long, default_value_t = 10)]
-    nx: usize,
-
-    /// Grid resolution in y direction
-    #[arg(long, default_value_t = 8)]
-    ny: usize,
-
-    /// Global sigma x
-    #[arg(long, default_value_t = 0.86)]
-    sigma_x: f64,
-
-    /// Global sigma y
-    #[arg(long, default_value_t = 0.63984)]
-    sigma_y: f64,
-
-    /// Remove H0 component
-    #[arg(long, default_value_t = false)]
-    remove_h0: bool,
-
-    #[arg(long)]
-    diagram_suffix: Option<String>,
+    #[arg(short,long)] input:PathBuf,
+    #[arg(short,long)] spacing:PathBuf,
+    #[arg(short,long)] output:PathBuf,
+    #[arg(long,default_value_t=10)] nx:usize,
+    #[arg(long,default_value_t=8)] ny:usize,
+    #[arg(long,default_value_t=0.86)] sigma_x:f64,
+    #[arg(long,default_value_t=0.63984)] sigma_y:f64,
+    #[arg(long,default_value_t=false)] remove_h0:bool,
+    #[arg(long)] diagram_suffix:Option<String>,
+    /// auto, direct, separable, shared, or sparse
+    #[arg(long,value_enum,default_value_t=Engine::Auto)] engine:Engine,
+    /// Optional absolute truncation error per pixel; required for sparse.
+    /// Auto is exact unless this argument is supplied.
+    #[arg(long)] absolute_error:Option<f64>,
 }
-
-fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let args = Args::parse();
-
-    // -----------------------------
-    // 1. Load dataset
-    // -----------------------------
-    let dataset: Vec<SpacingDiagram> = load_dataset(
-        &args.input,
-        &args.spacing,
-        Some(&args.output),
-        args.diagram_suffix.as_deref(),
-        args.remove_h0,
-    )?;
-
-    if dataset.is_empty() {
-        println!("No data found.");
-        return Ok(());
-    }
-
-    // -----------------------------
-    // 2. Apply spacing
-    // -----------------------------
-    let diagrams = to_scaled_diagrams(&dataset);
-
-    // -----------------------------
-    // 3. Compute bounds
-    // -----------------------------
-    let Some(bounds) = compute_bounds(&diagrams) else {
-        eprintln!("No persistence points remain after preprocessing.");
-        return Ok(());
+fn main()->Result<(),Box<dyn Error+Send+Sync>>{
+    let args=Args::parse();
+    let dataset:Vec<SpacingDiagram>=load_dataset(&args.input,&args.spacing,
+        Some(&args.output),args.diagram_suffix.as_deref(),args.remove_h0)?;
+    if dataset.is_empty(){ println!("No data found."); return Ok(()); }
+    let diagrams=to_scaled_diagrams(&dataset);
+    let Some(bounds)=compute_bounds(&diagrams) else{
+        eprintln!("No persistence points remain after preprocessing.");return Ok(());
     };
-
-    println!("Bounds: {:?}", bounds);
-
-    // -----------------------------
-    // 4. Compute persistence images
-    // -----------------------------
-    let images: Vec<Vec<f64>> = dataset
-        .par_iter()
-        .zip(diagrams.par_iter())
-        .map(|(sample, diagram)| {
-            let sigma_x_local = args.sigma_x * sample.voxel_spacing;
-            let sigma_y_local = args.sigma_y * sample.voxel_spacing;
-
-            persistence_image(
-                diagram,
-                bounds,
-                args.nx,
-                args.ny,
-                sigma_x_local,
-                sigma_y_local,
-            )
-        })
-        .collect();
-
-    // -----------------------------
-    // 5. Prepare filenames
-    // -----------------------------
-    let filenames: Vec<String> = dataset.iter().map(|s| io::filename_only(&s.path)).collect();
-
-    // -----------------------------
-    // 6. Save output
-    // -----------------------------
-    io::save_images_to_csv(&filenames, &images, &args.output)?;
-
-    println!("✔ Saved to {:?}", args.output);
-
+    println!("Bounds: {:?}",bounds);
+    let spacings:Vec<f64>=dataset.iter().map(|d|d.voxel_spacing).collect();
+    let images=batch_images(&diagrams,&spacings,bounds,args.nx,args.ny,
+        args.sigma_x,args.sigma_y,args.engine,args.absolute_error)
+        .map_err(|e|->Box<dyn Error+Send+Sync>{e.into()})?;
+    let filenames:Vec<String>=dataset.iter().map(|d|io::filename_only(&d.path)).collect();
+    io::save_images_to_csv(&filenames,&images,&args.output)?;
+    println!("Saved to {:?}",args.output);
     Ok(())
 }

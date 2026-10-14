@@ -2,13 +2,9 @@ pub mod dataset;
 pub mod diagram;
 pub mod image;
 pub mod io;
+pub mod optimized;
 
-// -----------------------------
-// Public API (what users see)
-// -----------------------------
-
-pub use dataset::{SpacingDiagram, load_dataset, to_scaled_diagrams};
-
-pub use diagram::{Diagram, read_diagram};
-
-pub use image::{Bounds, compute_bounds, persistence_image};
+pub use dataset::{SpacingDiagram,load_dataset,to_scaled_diagrams};
+pub use diagram::{Diagram,read_diagram};
+pub use image::{Bounds,compute_bounds,persistence_image};
+pub use optimized::{Engine,SharedGaussianBasis,adaptive_image,batch_images,separable_image,sparse_image};
