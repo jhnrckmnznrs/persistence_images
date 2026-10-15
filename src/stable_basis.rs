@@ -141,7 +141,7 @@ impl StableCdfBasis {
     }
 }
 fn candidate(ds:&[&Diagram],nx:usize,ny:usize)->bool{
-    if ds.len()<2||nx*ny<256 {return false;}
+    if ds.is_empty()||nx*ny<256 {return false;}
     let total:usize=ds.iter().map(|d|d.len()).sum();
     if total<512 {return false;}
     let sample:Vec<(f64,f64)>=ds.iter().flat_map(|d|d.iter()
