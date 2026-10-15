@@ -292,7 +292,7 @@ pub fn stable_interp_fft_image(
     diagram:&Diagram,bounds:Bounds,nx:usize,ny:usize,sx:f64,sy:f64,
     weight_scale:f64,epsilon:f64)->Result<Vec<f64>,String>{
     Ok(stable_interp_fft_image_with_certificate(
-        diagram,bounds,nx,ny,sx,sy,weight_scale,epsilon)?0.0)
+        diagram,bounds,nx,ny,sx,sy,weight_scale,epsilon)?.0)
 }
 
 #[cfg(test)]
