@@ -15,7 +15,7 @@ pub mod stable;
 pub use stable::{stable_persistence_image,stable_batch_images};
 
 pub mod stable_basis;
-pub use stable_basis::{StableCdfBasis,stable_batch_images_with_engine};
+pub use stable_basis::{StableCdfBasis,stable_batch_images_with_engine,stable_batch_images_with_error};
 
 pub mod stable_fft;
 pub use stable_fft::{StableFftCertificate,StableIntegratedFft,select_stable_fft_stencil,stable_interp_fft_image,stable_interp_fft_image_with_certificate};

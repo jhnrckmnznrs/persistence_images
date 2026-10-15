@@ -11,6 +11,8 @@ jobs:
       - name: Rust tests and benchmark smoke
         run: |
           cargo test --all-targets --locked
+          cargo run --release --locked --example benchmark_suite -- --case small_continuous --representation stable --engine direct --repeats 1 --warmup 0
+          cargo run --release --locked --example benchmark_suite -- --case medium_continuous --representation stable --engine interp-fft --absolute-error 1e-8 --repeats 1 --warmup 0
           cargo run --release --locked --example benchmark_stable_shared
           cargo run --release --locked -- --help | grep representation
           cargo run --release --locked --example benchmark_suite -- --case small_continuous --engine separable --repeats 1 --warmup 0
