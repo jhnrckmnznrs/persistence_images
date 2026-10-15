@@ -32,3 +32,31 @@ emits a JSON report and CSV summary, and verifies fingerprints and image sums.
 Do not compare timings taken on different machines or different thread settings
 as if they were controlled speedups. Synthetic data do not replace real
 persistence-diagram benchmarks.
+
+## Stable normalized weighted Gaussian pixel integrals
+
+Use `--representation stable` to benchmark the mathematically stable pixel
+integrals on the **same** deterministic source diagrams and square bounds as
+the existing sampled tests. A bounded persistence ramp
+`min(1,p/weight_scale)` defaults to scale 0.7, and errors are measured
+against the direct CDF-difference formula on every pixel for small grids,
+or 64 deterministic pixel rectangles otherwise.
+
+```bash
+cargo run --release --locked --example benchmark_suite -- \
+  --case medium_continuous --representation stable --engine direct --repeats 5
+cargo run --release --locked --example benchmark_suite -- \
+  --case medium_continuous --representation stable --engine interp-fft \
+  --absolute-error 1e-8 --repeats 5
+```
+
+For cross-language comparisons and CSV summary reports, use the companion
+Python suite's `benchmarks/run_suite.py --representation stable`. The
+single-case engine supports `direct`, `shared`, `interp-fft`, and
+`auto` for stable images. Without a tolerance, stable `auto` retains
+the exact CDF-integral backends.
+
+The FFT interpolation theorem bounds *exact-arithmetic* pixel and whole
+vector error; measured sampled-pixel errors do not prove a global floating
+point error bound. Kernel timings omit dataset generation and file I/O;
+Linux VmHWM peak memory includes process startup and initialization.

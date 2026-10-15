@@ -9,6 +9,8 @@ use crate::diagram::Diagram;
 use crate::image::Bounds;
 use crate::optimized::Engine;
 use crate::stable::{cdf_interval, stable_persistence_image};
+use crate::stable_fft::{StableIntegratedFft,select_stable_fft_stencil};
+use crate::interp_fft::fft_shape;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 
@@ -139,7 +141,7 @@ impl StableCdfBasis {
     }
 }
 fn candidate(ds:&[&Diagram],nx:usize,ny:usize)->bool{
-    if ds.len()<2||nx*ny<256 {return false;}
+    if ds.is_empty()||nx*ny<256 {return false;}
     let total:usize=ds.iter().map(|d|d.len()).sum();
     if total<512 {return false;}
     let sample:Vec<(f64,f64)>=ds.iter().flat_map(|d|d.iter()
@@ -162,13 +164,20 @@ fn economical(b:&StableCdfBasis,ds:&[&Diagram],nx:usize,ny:usize)->bool {
 }
 /// Exact-integral stable batch with cost-guided reuse. Engine::Shared forces
 /// reuse; Direct and Separable retain pointwise integration; Auto may reuse.
-pub fn stable_batch_images_with_engine(
+pub fn stable_batch_images_with_error(
     diagrams:&[Diagram],spacings:&[f64],bounds:Bounds,nx:usize,ny:usize,
-    sx:f64,sy:f64,weight_scale:f64,engine:Engine)->Result<Vec<Vec<f64>>,String>{
-    if !matches!(engine,Engine::Auto|Engine::Direct|Engine::Separable|Engine::Shared){
-        return Err("Stable images support auto, direct, separable and shared".into());
+    sx:f64,sy:f64,weight_scale:f64,engine:Engine,
+    epsilon:Option<f64>)->Result<Vec<Vec<f64>>,String>{
+    if !matches!(engine,Engine::Auto|Engine::Direct|Engine::Separable|Engine::Shared|Engine::InterpFft){
+        return Err("Stable images support auto, direct, separable, shared and interp-fft".into());
     }
     if diagrams.len()!=spacings.len() {return Err("spacings length mismatch".into());}
+    if epsilon.is_some_and(|e|!e.is_finite()||e<=0.0) {
+        return Err("absolute_error must be finite and positive".into());
+    }
+    if engine==Engine::InterpFft && epsilon.is_none() {
+        return Err("Stable interp-fft requires --absolute-error".into());
+    }
     let mut groups:BTreeMap<u64,Vec<usize>>=BTreeMap::new();
     for (i,&s) in spacings.iter().enumerate() {
         if !s.is_finite()||s<=0.0||!(sx*s).is_finite()||!(sy*s).is_finite()||
@@ -194,12 +203,66 @@ pub fn stable_batch_images_with_engine(
                 Err(_)=>{},
             }
         }
+        // Shared FFT spectrum and plans are constructed only once per spacing
+        // group. No approximation is ever considered without explicit epsilon.
+        if matches!(engine,Engine::InterpFft|Engine::Auto) {
+            if let Some(eps)=epsilon {
+                let inside=ds.iter().all(|d|d.iter().all(|&(b,p)|
+                    b.is_finite()&&p.is_finite()&&p>=0.0
+                    &&b>=bounds.x_min&&b<=bounds.x_max
+                    &&p>=bounds.y_min&&p<=bounds.y_max));
+                if engine==Engine::InterpFft&&!inside {
+                    return Err("Stable FFT needs all sources inside fixed bounds".into());
+                }
+                if inside {
+                    let mut max_weight=0.0_f64;
+                    for d in &ds {
+                        let sum:f64=d.iter().map(|&(_,p)|(p/weight_scale).min(1.0)).sum();
+                        max_weight=max_weight.max(sum);
+                    }
+                    let cert=select_stable_fft_stencil(
+                        max_weight,bounds,nx,ny,local_sx,local_sy,eps)?;
+                    if engine==Engine::InterpFft&&cert.is_none() {
+                        return Err("No integrated FFT stencil certifies absolute_error".into());
+                    }
+                    if let Some(c)=cert {
+                        let use_fft=engine==Engine::InterpFft ||
+                            (nx*ny>=4096 &&
+                            fft_shape(nx,ny,c.width_x,c.width_y).is_some_and(|(lx,ly)|{
+                                let n:usize=ds.iter().map(|d|d.len()).sum();
+                                let work=(n as f64)*(c.width_x*c.width_y) as f64
+                                    +3.0*(idx.len() as f64)*(lx*ly) as f64
+                                        *((lx*ly) as f64).log2();
+                                (n as f64)*(nx*ny) as f64>2.0*work
+                            }));
+                        if use_fft {
+                            if max_weight==0.0 {
+                                for &i in idx{out[i]=vec![0.0;nx*ny];}
+                            } else {
+                                let fft=StableIntegratedFft::new(
+                                    bounds,nx,ny,local_sx,local_sy,c,weight_scale)?;
+                                for &i in idx{out[i]=fft.evaluate(&diagrams[i])?;}
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
         let computed:Vec<Result<Vec<f64>,String>>=idx.par_iter().map(|&i|
             stable_persistence_image(&diagrams[i],bounds,nx,ny,
                 local_sx,local_sy,weight_scale)).collect();
         for (&i,v) in idx.iter().zip(computed){out[i]=v?;}
     }
     Ok(out)
+}
+
+/// Backward-compatible exact stable batch; no approximation is selected.
+pub fn stable_batch_images_with_engine(
+    diagrams:&[Diagram],spacings:&[f64],bounds:Bounds,nx:usize,ny:usize,
+    sx:f64,sy:f64,weight_scale:f64,engine:Engine)->Result<Vec<Vec<f64>>,String>{
+    stable_batch_images_with_error(
+        diagrams,spacings,bounds,nx,ny,sx,sy,weight_scale,engine,None)
 }
 
 #[cfg(test)]
@@ -246,5 +309,36 @@ mod tests{
         assert!(StableCdfBasis::from_diagrams(&[&vec![(0.1,-0.1)]],b,10,10,0.2,0.2,1.0).is_err());
         assert!(stable_batch_images_with_engine(&[vec![]],&[1.0],b,10,10,0.2,0.2,1.0,
             Engine::Sparse).is_err());
+    }
+}
+
+#[cfg(test)]
+mod stable_fft_batch_tests{
+    use super::*;
+    #[test]
+    fn stable_batch_fft_explicit_auto_fallback_and_mixed_spacing(){
+        let b=Bounds{x_min:0.0,x_max:1.0,y_min:0.0,y_max:1.0};
+        let a:Diagram=(0..1200).map(|k|(
+            (k*37%1201) as f64/1201.0,
+            (k*89%1207) as f64/1207.0)).collect();
+        let d=vec![a.clone(),a.clone()];
+        let spacings=vec![1.0,1.4];
+        let fft=stable_batch_images_with_error(
+            &d,&spacings,b,96,80,0.2,0.15,0.7,Engine::InterpFft,Some(1e-8)).unwrap();
+        let reference=stable_batch_images_with_engine(
+            &d,&spacings,b,96,80,0.2,0.15,0.7,Engine::Direct).unwrap();
+        for (a,e) in fft.iter().zip(&reference) {
+            let max=a.iter().zip(e).map(|(v,w)|(v-w).abs()).fold(0.0_f64,f64::max);
+            assert!(max<=1e-8+1e-10,"batch FFT error {max}");
+        }
+        let exact=stable_batch_images_with_error(
+            &d,&spacings,b,96,80,0.2,0.15,0.7,Engine::Auto,None).unwrap();
+        for (a,e) in exact.iter().zip(reference.iter()) {
+            let max=a.iter().zip(e).map(|(v,w)|(v-w).abs()).fold(0.0_f64,f64::max);
+            assert!(max<1e-11);
+        }
+        assert!(stable_batch_images_with_error(
+            &d,&spacings,b,8,8,0.0001,0.0001,0.7,
+            Engine::InterpFft,Some(1e-9)).is_err());
     }
 }

@@ -207,6 +207,29 @@ preserves the same fixed-grid Wasserstein stability theorem; floating-point
 summation order may differ. `StableCdfBasis::from_diagrams` and
 `stable_batch_images_with_engine` are available from the Rust API.
 
+For large **continuous** diagrams with resolved Gaussian bandwidths, the
+`--representation stable --engine interp-fft --absolute-error 1e-8` backend
+deposits weighted persistence points onto local Lagrange stencils and
+convolves them with the **integrated normalized Gaussian pixel mass**
+using one zero-padded FFT. This is not the sampled Gaussian transform.
+The interpolant chooses stencil widths from a certified uniform per-pixel
+error budget proportional to the sum of persistence weights, and also
+reports a whole-feature L1 bound. Both bounds concern interpolation in
+exact arithmetic, excluding signed-deposition and FFT roundoff.
+
+With `--engine auto --absolute-error 1e-8`, Rust can choose shared
+CDF bases for quantized diagrams, the integrated FFT for sufficiently
+large continuous diagrams, or direct CDF integration otherwise. Without
+the explicit tolerance, stable auto is exact in real arithmetic.
+FFT requires all sources inside fixed bounds and sufficiently resolved
+Gaussians; explicit FFT errors when these conditions fail.
+
+The new Rust APIs are `StableIntegratedFft`,
+`select_stable_fft_stencil`, `stable_interp_fft_image`,
+`stable_interp_fft_image_with_certificate`, and
+`stable_batch_images_with_error`. The older exact
+`stable_batch_images_with_engine` interface remains compatible.
+
 The stable mode uses a separate `stable_persistence_image` Rust API. It
 supports `auto`, `direct`, `separable`, and `shared` CLI engines (all evaluate the
 integral formula), and rejects truncating FFT/sparse backends and

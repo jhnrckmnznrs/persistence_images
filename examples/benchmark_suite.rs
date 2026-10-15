@@ -1,6 +1,6 @@
 //! Shared deterministic persistence-image benchmark; one (case, engine) per process.
 //! cargo run --release --locked --example benchmark_suite -- --case small_continuous --engine separable
-use persistence_images::{Bounds,Diagram,Engine,batch_images};
+use persistence_images::{Bounds,Diagram,Engine,batch_images,stable_batch_images_with_error};
 use serde::Deserialize;
 use serde_json::json;
 use std::{env,fs,time::Instant,collections::BTreeMap};
@@ -61,6 +61,32 @@ fn reference(pts:&Diagram,c:&Case,indices:&[usize])->Vec<f64> {
   sum
  }).collect()
 }
+fn integrated_axis_mass(lo:f64,hi:f64,center:f64,sigma:f64)->f64 {
+ let a=(lo-center)/(sigma*std::f64::consts::SQRT_2);
+ let b=(hi-center)/(sigma*std::f64::consts::SQRT_2);
+ if a>=0.0 {0.5*(libm::erfc(a)-libm::erfc(b))}
+ else if b<=0.0 {0.5*(libm::erfc(-b)-libm::erfc(-a))}
+ else {0.5*(libm::erf(b)-libm::erf(a))}
+}
+fn stable_reference(pts:&Diagram,c:&Case,indices:&[usize],weight_scale:f64)->Vec<f64>{
+ indices.iter().map(|&idx|{
+  let i=idx/c.ny;
+  let j=idx%c.ny;
+  let (xl,xu)=(i as f64/c.nx as f64,(i+1) as f64/c.nx as f64);
+  let (yl,yu)=(j as f64/c.ny as f64,(j+1) as f64/c.ny as f64);
+  let (mut sum,mut compensation)=(0.0_f64,0.0_f64);
+  for &(b,p) in pts{
+   let w=(p/weight_scale).min(1.0);
+   if w==0.0 {continue;}
+   let v=w*integrated_axis_mass(xl,xu,b,c.sigma_x)
+     *integrated_axis_mass(yl,yu,p,c.sigma_y);
+   let t=v-compensation;
+   let next=sum+t;
+   compensation=(next-sum)-t;sum=next;
+  }
+  sum
+ }).collect()
+}
 fn peak_bytes()->Option<u64> {
  fs::read_to_string("/proc/self/status").ok().and_then(|s|
  s.lines().find(|l|l.starts_with("VmHWM:"))
@@ -85,6 +111,8 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
  if suite.schema_version!=1 {return Err("Invalid benchmark schema version".into());}
  let (mut case,mut method)=("small_continuous".to_string(),"separable".to_string());
  let (mut repeats,mut warmup)=(5usize,1usize);
+ let mut representation="sampled".to_string();
+ let mut weight_scale=0.7_f64;
  let mut epsilon=1e-8_f64;
  let mut output:Option<String>=None;
  let mut args=env::args().skip(1);
@@ -98,6 +126,8 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
   let value=args.next().ok_or("Missing CLI argument value")?;
   match flag.as_str() {
    "--case"=>case=value,
+   "--representation"=>representation=value,
+   "--weight-scale"=>weight_scale=value.parse()?,
    "--engine"=>method=value,
    "--repeats"=>repeats=value.parse()?,
    "--warmup"=>warmup=value.parse()?,
@@ -106,7 +136,9 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
    _=>return Err(format!("Invalid CLI argument: {flag}").into())
   }
  }
- if repeats==0 || !epsilon.is_finite() || epsilon<=0.0 {
+ if repeats==0 || !epsilon.is_finite() || epsilon<=0.0
+   || !weight_scale.is_finite() || weight_scale<=0.0
+   || !matches!(representation.as_str(),"sampled"|"stable") {
   return Err("Invalid repeats or absolute-error".into());
  }
  let c=suite.cases.iter().find(|c|c.name==case).ok_or("Unknown case")?;
@@ -121,8 +153,13 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
   Engine::Sparse|Engine::InterpFft|Engine::Auto=>Some(epsilon),_=>None
  };
  let compute=||->Result<Vec<f64>,String>{
-  let mut images=batch_images(std::slice::from_ref(&points),&[1.0],
-    bounds,c.nx,c.ny,c.sigma_x,c.sigma_y,engine,tol)?;
+  let mut images=if representation=="stable" {
+    stable_batch_images_with_error(std::slice::from_ref(&points),&[1.0],
+       bounds,c.nx,c.ny,c.sigma_x,c.sigma_y,weight_scale,engine,tol)?
+  } else {
+    batch_images(std::slice::from_ref(&points),&[1.0],
+       bounds,c.nx,c.ny,c.sigma_x,c.sigma_y,engine,tol)?
+  };
   Ok(images.remove(0))
  };
  for _ in 0..warmup {std::hint::black_box(compute()?);}
@@ -134,7 +171,9 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
   times.push(start.elapsed().as_secs_f64()*1000.0);
  }
  let idx=sample_indices(c.nx,c.ny);
- let truth=reference(&points,c,&idx);
+ let truth=if representation=="stable" {
+    stable_reference(&points,c,&idx,weight_scale)
+ } else {reference(&points,c,&idx)};
  let err=idx.iter().zip(truth.iter()).map(|(&i,&r)|(image[i]-r).abs())
     .fold(0.0_f64,f64::max);
  let refmax=truth.iter().map(|v|v.abs()).fold(0.0_f64,f64::max);
@@ -150,7 +189,9 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
  let report=json!({
   "schema_version":1,"suite":"persistence-images-cross-language-v1",
   "case":c.name,"profile":c.profile,"kind":c.kind,"language":"rust",
-  "engine":method,"generator":suite.generator,
+  "engine":method,"representation":representation,
+  "weight_scale":if representation=="stable" {Some(weight_scale)}else{None},
+  "generator":suite.generator,
   "source_fingerprint_fnv64":fingerprint,
   "n_points":c.n,"nx":c.nx,"ny":c.ny,
   "sigma_x":c.sigma_x,"sigma_y":c.sigma_y,
@@ -170,7 +211,7 @@ fn run()->Result<(),Box<dyn std::error::Error>> {
   "cpu_model":cpu_model(),
   "logical_cpus":std::thread::available_parallelism().ok().map(|v|v.get()),
   "thread_env":threads,
-  "precision_note":"Sampled direct-reference error is not an image-wide bound; FFT roundoff is excluded"
+  "precision_note":"Only selected pixels use direct reference on large grids; approximation certificates exclude FFT/deposition rounding"
  });
  let text=serde_json::to_string_pretty(&report)?;
  if let Some(file)=output {fs::write(file,format!("{text}\n"))?;}
