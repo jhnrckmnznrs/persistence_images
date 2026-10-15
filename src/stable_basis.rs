@@ -231,9 +231,9 @@ pub fn stable_batch_images_with_error(
                             fft_shape(nx,ny,c.width_x,c.width_y).is_some_and(|(lx,ly)|{
                                 let n:usize=ds.iter().map(|d|d.len()).sum();
                                 let work=(n as f64)*(c.width_x*c.width_y) as f64
-                                    +16.0*(idx.len() as f64)*(lx*ly) as f64
+                                    +3.0*(idx.len() as f64)*(lx*ly) as f64
                                         *((lx*ly) as f64).log2();
-                                (n as f64)*(nx*ny) as f64>5.0*work
+                                (n as f64)*(nx*ny) as f64>2.0*work
                             }));
                         if use_fft {
                             if max_weight==0.0 {
