@@ -292,7 +292,7 @@ pub fn stable_interp_fft_image(
     diagram:&Diagram,bounds:Bounds,nx:usize,ny:usize,sx:f64,sy:f64,
     weight_scale:f64,epsilon:f64)->Result<Vec<f64>,String>{
     Ok(stable_interp_fft_image_with_certificate(
-        diagram,bounds,nx,ny,sx,sy,weight_scale,epsilon)?.0)
+        diagram,bounds,nx,ny,sx,sy,weight_scale,epsilon)?0.0)
 }
 
 #[cfg(test)]
@@ -331,16 +331,16 @@ mod tests {
     fn zero_weight_and_rejections(){
         let zero=vec![(0.0,0.0);20];
         let (image,cert)=stable_interp_fft_image_with_certificate(
-            &zero,bounds(),64,48,.15,.2,1.0,1e-8).unwrap();
+            &zero,bounds(),64,48,0.15,0.2,1.0,1e-8).unwrap();
         assert!(image.iter().all(|&v|v==0.0));
         assert_eq!(cert.pixel_error,0.0);
         assert!(stable_interp_fft_image(&vec![(0.5,0.5)],bounds(),16,16,
             0.0001,0.0001,1.0,1e-10).is_err());
         assert!(stable_interp_fft_image(&vec![(0.5,0.5)],bounds(),64,64,
-            .2,.2,1.0,0.0).is_err());
+            0.2,0.2,1.0,0.0).is_err());
         assert!(stable_interp_fft_image(&vec![(0.5,-0.2)],bounds(),64,64,
-            .2,.2,1.0,1e-8).is_err());
+            0.2,0.2,1.0,1e-8).is_err());
         assert!(stable_interp_fft_image(&vec![(2.5,0.2)],bounds(),64,64,
-            .2,.2,1.0,1e-8).is_err());
+            0.2,0.2,1.0,1e-8).is_err());
     }
 }
