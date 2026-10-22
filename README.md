@@ -230,10 +230,10 @@ The new Rust APIs are `StableIntegratedFft`,
 `stable_batch_images_with_error`. The older exact
 `stable_batch_images_with_engine` interface remains compatible.
 
-The stable mode uses a separate `stable_persistence_image` Rust API. It
-supports `auto`, `direct`, `separable`, and `shared` CLI engines (all evaluate the
-integral formula), and rejects truncating FFT/sparse backends and
-`--absolute-error`. Other engines apply only to the legacy sampled mode.
+The stable mode uses a separate `stable_persistence_image` Rust API.
+Its exact engines are `auto` without a tolerance, `direct`, `separable`, and
+`shared`. The approximate `interp-fft` engine requires `--absolute-error`,
+as described above; stable mode rejects the legacy `sparse` engine.
 
 For a reproducible synthetic performance comparison of the direct stable
 integrator against the shared CDF basis:
